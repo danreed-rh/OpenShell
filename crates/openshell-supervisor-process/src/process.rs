@@ -1599,6 +1599,17 @@ mod tests {
         });
 
         let result = drop_privileges(&policy);
+        #[cfg(target_os = "linux")]
+        {
+            if nix::unistd::geteuid().is_root() && !capability_bounding_set_clear_available() {
+                let msg = format!("{}", result.unwrap_err());
+                assert!(
+                    msg.contains("Failed to clear child capability bounding set"),
+                    "unexpected failure: {msg}"
+                );
+                return;
+            }
+        }
         assert!(result.is_ok(), "drop_privileges failed: {result:?}");
     }
 
@@ -1913,9 +1924,10 @@ mod tests {
             return;
         }
 
-        let current_user = User::from_uid(nix::unistd::geteuid())
-            .unwrap()
-            .expect("current user entry");
+        let Ok(Some(current_user)) = User::from_uid(nix::unistd::geteuid()) else {
+            eprintln!("skipping: current UID has no /etc/passwd entry");
+            return;
+        };
         let restricted_group = Group::from_gid(Gid::from_raw(0))
             .unwrap()
             .expect("gid 0 group entry");

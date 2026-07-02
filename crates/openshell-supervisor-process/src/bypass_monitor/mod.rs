@@ -554,6 +554,17 @@ mod tests {
             std::thread::sleep(Duration::from_millis(20));
         }
 
+        let child_fd_dir = format!("/proc/{child_pid}/fd");
+        if std::fs::read_dir(&child_fd_dir).is_err() {
+            #[allow(unsafe_code)]
+            unsafe {
+                libc::kill(child_pid, libc::SIGKILL);
+                libc::waitpid(child_pid, std::ptr::null_mut(), 0);
+            }
+            eprintln!("skipping: cannot read {child_fd_dir} (restricted /proc)");
+            return;
+        }
+
         let (binary, pid, ancestors) = resolve_process_identity(std::process::id(), peer_port);
 
         // libc/syscall FFI requires unsafe
